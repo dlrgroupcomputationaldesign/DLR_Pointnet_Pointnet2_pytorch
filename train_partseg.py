@@ -129,7 +129,7 @@ def main(args):
             torch.nn.init.constant_(m.bias.data, 0.0)
 
     try:
-        checkpoint = torch.load(str(exp_dir) + '/checkpoints/best_model.pth')
+        checkpoint = torch.load(str(exp_dir) + '/checkpoints/best_model_fromrepo.pth')
         start_epoch = checkpoint['epoch']
         classifier.load_state_dict(checkpoint['model_state_dict'])
         log_string('Use pretrain model')
@@ -274,7 +274,7 @@ def main(args):
             epoch + 1, test_metrics['accuracy'], test_metrics['class_avg_iou'], test_metrics['inctance_avg_iou']))
         if (test_metrics['inctance_avg_iou'] >= best_inctance_avg_iou):
             logger.info('Save model...')
-            savepath = str(checkpoints_dir) + '/best_model.pth'
+            savepath = str(checkpoints_dir) + '/best_model_fromrepo.pth'
             log_string('Saving at %s' % savepath)
             state = {
                 'epoch': epoch,

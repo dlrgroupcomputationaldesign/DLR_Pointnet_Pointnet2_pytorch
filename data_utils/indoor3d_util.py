@@ -44,6 +44,7 @@ def collect_point_label(anno_path, out_filename, file_format='txt'):
     Note:
         the points are shifted before save, the most negative point is now at origin.
     """
+    # Points list which contain XYZRGB and Labels.
     points_list = []
     for f in glob.glob(os.path.join(anno_path, '*.txt')):
         cls = os.path.basename(f).split('_')[0]
@@ -56,7 +57,9 @@ def collect_point_label(anno_path, out_filename, file_format='txt'):
         points_list.append(np.concatenate([points, labels], 1)) # Nx7
     
     data_label = np.concatenate(points_list, 0)
+    # Get min value for XYZ along axis 0
     xyz_min = np.amin(data_label, axis=0)[0:3]
+    # Less min value from points
     data_label[:, 0:3] -= xyz_min
     
     if file_format=='txt':

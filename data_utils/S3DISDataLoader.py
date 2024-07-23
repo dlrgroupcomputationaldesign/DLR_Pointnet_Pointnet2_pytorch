@@ -13,22 +13,33 @@ class S3DISDataset(Dataset):
         self.transform = transform
         rooms = sorted(os.listdir(data_root))
         rooms = [room for room in rooms if 'Area_' in room]
+        # Used Room_AREA_5 For Testing
         if split == 'train':
             rooms_split = [room for room in rooms if not 'Area_{}'.format(test_area) in room]
         else:
             rooms_split = [room for room in rooms if 'Area_{}'.format(test_area) in room]
-
+        # Store Room points and room labels
         self.room_points, self.room_labels = [], []
+        # Room Coord Min and Max
         self.room_coord_min, self.room_coord_max = [], []
+        # All Number of points
         num_point_all = []
+        
+        # Class Names There are 13 classes at the moment
         labelweights = np.zeros(13)
-
+        
+        # Iterate over each Room
         for room_name in tqdm(rooms_split, total=len(rooms_split)):
             room_path = os.path.join(data_root, room_name)
+            # Load Room
             room_data = np.load(room_path)  # xyzrgbl, N*7
+            
             points, labels = room_data[:, 0:6], room_data[:, 6]  # xyzrgb, N*6; l, N
+            # Return distribution of labels
             tmp, _ = np.histogram(labels, range(14))
+            # Add to labelweights
             labelweights += tmp
+            # Calculate min and max for points
             coord_min, coord_max = np.amin(points, axis=0)[:3], np.amax(points, axis=0)[:3]
             self.room_points.append(points), self.room_labels.append(labels)
             self.room_coord_min.append(coord_min), self.room_coord_max.append(coord_max)
@@ -36,7 +47,6 @@ class S3DISDataset(Dataset):
         labelweights = labelweights.astype(np.float32)
         labelweights = labelweights / np.sum(labelweights)
         self.labelweights = np.power(np.amax(labelweights) / labelweights, 1 / 3.0)
-        print(self.labelweights)
         sample_prob = num_point_all / np.sum(num_point_all)
         num_iter = int(np.sum(num_point_all) * sample_rate / num_point)
         room_idxs = []
@@ -67,9 +77,13 @@ class S3DISDataset(Dataset):
         # normalize
         selected_points = points[selected_point_idxs, :]  # num_point * 6
         current_points = np.zeros((self.num_point, 9))  # num_point * 9
+        
+        
         current_points[:, 6] = selected_points[:, 0] / self.room_coord_max[room_idx][0]
         current_points[:, 7] = selected_points[:, 1] / self.room_coord_max[room_idx][1]
         current_points[:, 8] = selected_points[:, 2] / self.room_coord_max[room_idx][2]
+        
+        
         selected_points[:, 0] = selected_points[:, 0] - center[0]
         selected_points[:, 1] = selected_points[:, 1] - center[1]
         selected_points[:, 3:6] /= 255.0
@@ -171,7 +185,7 @@ class ScannetDatasetWholeScene():
         return len(self.scene_points_list)
 
 if __name__ == '__main__':
-    data_root = '/data/yxu/PointNonLocal/data/stanford_indoor3d/'
+    data_root = 'E:\DLR_Pointnet_Pointnet2_pytorch-master\data\stanford_indoor3d'
     num_point, test_area, block_size, sample_rate = 4096, 5, 1.0, 0.01
 
     point_data = S3DISDataset(split='train', data_root=data_root, num_point=num_point, test_area=test_area, block_size=block_size, sample_rate=sample_rate, transform=None)
@@ -186,9 +200,13 @@ if __name__ == '__main__':
     torch.cuda.manual_seed_all(manual_seed)
     def worker_init_fn(worker_id):
         random.seed(manual_seed + worker_id)
+        
     train_loader = torch.utils.data.DataLoader(point_data, batch_size=16, shuffle=True, num_workers=16, pin_memory=True, worker_init_fn=worker_init_fn)
+    
     for idx in range(4):
         end = time.time()
         for i, (input, target) in enumerate(train_loader):
             print('time: {}/{}--{}'.format(i+1, len(train_loader), time.time() - end))
             end = time.time()
+    features, target = point_data.__getitem__(0)
+    print(features.shape, target.shape)

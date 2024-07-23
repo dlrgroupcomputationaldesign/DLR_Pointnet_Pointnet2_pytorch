@@ -1,11 +1,11 @@
 # TODO Implement DLR Group Point Cloud dataset
 """
-The DLR Groyp Point Cloud dataset should opperate just like Pointnet_Pointnet2_pytorch/data_utils/S3DISDataLoader.py S3DISDataLoader class,
+The DLR Group Point Cloud dataset should opperate just like Pointnet_Pointnet2_pytorch/data_utils/S3DISDataLoader.py S3DISDataLoader class,
 but pull data in the form defined @ https://portal.azure.com/#@dlrgroup.com/resource/subscriptions/182a471a-5634-4d1a-a722-f7779cf5d470/resourceGroups/data_science/providers/Microsoft.Storage/storageAccounts/dlrdatalake/storagebrowser
 
 Features:
  * be able to set a selection of projects via a list (default to all projects)
- * be ablel to define clustered vs unclustered, if clustered use the data in https://portal.azure.com/#@dlrgroup.com/resource/subscriptions/182a471a-5634-4d1a-a722-f7779cf5d470/resourceGroups/data_science/providers/Microsoft.Storage/storageAccounts/dlrdatalake/storagebrowser
+ * be able to define clustered vs unclustered, if clustered use the data in https://portal.azure.com/#@dlrgroup.com/resource/subscriptions/182a471a-5634-4d1a-a722-f7779cf5d470/resourceGroups/data_science/providers/Microsoft.Storage/storageAccounts/dlrdatalake/storagebrowser
    if unclusterd use the unclustered version in the unclustered folder
 
 
@@ -136,8 +136,8 @@ class DLRGroupDataset(Dataset):
     
     
 if __name__ == '__main__':
-    data_root = r'E:\DLR_Pointnet_Pointnet2_pytorch-master\data\annotations' # Data is the path where you have saved all the .npy files it should be root folder not sub folders
-    labels_path = r'E:\DLR_Pointnet_Pointnet2_pytorch-master\data_utils\meta\labels.txt'# Path where we have saved our labels
+    data_root = r'C:\DLR_Pointnet_Pointnet2_pytorch-master\data\annotations' # Data is the path where you have saved all the .npy files it should be root folder not sub folders
+    labels_path = r'C:\DLR_Pointnet_Pointnet2_pytorch-master\data_utils\meta\labels.txt'# Path where we have saved our labels
     num_point, block_size, sample_rate = 4096, 2.0, 1.0
     test_project = 'test' # Name of the Project which we want to consider for test
     

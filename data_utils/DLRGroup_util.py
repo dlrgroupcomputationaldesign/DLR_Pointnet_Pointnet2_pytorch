@@ -55,7 +55,7 @@ def extract_and_save_classes(main_folder, output_folder, output_filename="labels
     """
     # set to store all labels
     labels_set = set()
-    # Walk over the main folder which contain all the .npy files eg. E:\DLR_Pointnet_Pointnet2_pytorch-master\data\annotations
+    # Walk over the main folder which contain all the .npy files eg. C:\DLR_Pointnet_Pointnet2_pytorch-master\data\annotations
     for root, dirs, files in os.walk(main_folder):
         
         for file in files:
@@ -205,12 +205,12 @@ if __name__ == '__main__':
     container_name = os.getenv("CONTAINER_NAME")
     
 
-    # Path to the input csv Directory where we want to download both clustered and unclustered data
-    input_dir = r'E:\DLR_Pointnet_Pointnet2_pytorch-master\data\csv_files'
+    # Path to the input csv Directory where I want to download both clustered and unclustered data
+    input_dir = r'C:\DLR_Pointnet_Pointnet2_pytorch-master\data\csv_files'
     # Path to the Output Directory
-    output_dir = r'E:\DLR_Pointnet_Pointnet2_pytorch-master\data\annotations'
+    output_dir = r'C:\DLR_Pointnet_Pointnet2_pytorch-master\data\annotations'
     # Path to the output label directory
-    output_label_dir = r'E:\DLR_Pointnet_Pointnet2_pytorch-master\data_utils\meta'
+    output_label_dir = r'C:\DLR_Pointnet_Pointnet2_pytorch-master\data_utils\meta'
     
     # I have a download file, i will make a copy of the same file for test
     # I will comment the below function as i already have some data

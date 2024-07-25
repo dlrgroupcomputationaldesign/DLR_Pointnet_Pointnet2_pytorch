@@ -15,7 +15,7 @@ Creates:
 
 import os
 import numpy as np
-
+import pandas as pd
 from tqdm import tqdm
 from torch.utils.data import Dataset
 
@@ -87,7 +87,10 @@ class DLRGroupDataset(Dataset):
         num_iter = int(np.sum(num_point_all) * sample_rate / num_point)
         room_idxs = []
         for index in range(len(projects_split)):
-            room_idxs.extend([index] * int(round(sample_prob[index] * num_iter)))
+            if num_point_all[index] < 100_000:
+                pass
+            else:
+                room_idxs.extend([index] * int(round(sample_prob[index] * num_iter)))
         self.room_idxs = np.array(room_idxs)
         print("Totally {} samples in {} set.".format(len(self.room_idxs), split))
 
@@ -96,7 +99,9 @@ class DLRGroupDataset(Dataset):
         points = self.room_points[room_idx]   # N * 6
         labels = self.room_labels[room_idx]   # N
         N_points = points.shape[0]
+        # print(f"Total points in the item: {N_points}")
 
+        iterrs = 0
         while (True):
             center = points[np.random.choice(N_points)][:3]
             # We have changed Black size from 1 to 2
@@ -104,8 +109,12 @@ class DLRGroupDataset(Dataset):
             block_min = center - [self.block_size / 2.0, self.block_size / 2.0, 0] 
             block_max = center + [self.block_size / 2.0, self.block_size / 2.0, 0]
             point_idxs = np.where((points[:, 0] >= block_min[0]) & (points[:, 0] <= block_max[0]) & (points[:, 1] >= block_min[1]) & (points[:, 1] <= block_max[1]))[0]
-            if point_idxs.size > 1024:
+            if point_idxs.size > self.num_point:
                 break
+
+            iterrs += 1
+            if iterrs == 200:
+                print("Over 200")
 
         if point_idxs.size >= self.num_point:
             selected_point_idxs = np.random.choice(point_idxs, self.num_point, replace=False)

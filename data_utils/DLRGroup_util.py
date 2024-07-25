@@ -206,15 +206,15 @@ if __name__ == '__main__':
     
 
     # Path to the input csv Directory where I want to download both clustered and unclustered data
-    input_dir = r'C:\DLR_Pointnet_Pointnet2_pytorch-master\data\csv_files'
+    input_dir = r'D:\Datasets\PointClouds\csvs'
     # Path to the Output Directory
-    output_dir = r'C:\DLR_Pointnet_Pointnet2_pytorch-master\data\annotations'
+    output_dir = r'D:\Datasets\PointClouds\nps'
     # Path to the output label directory
-    output_label_dir = r'C:\DLR_Pointnet_Pointnet2_pytorch-master\data_utils\meta'
+    output_label_dir = r'D:\Datasets\PointClouds\data_utils\meta'
     
     # I have a download file, i will make a copy of the same file for test
     # I will comment the below function as i already have some data
-    # download_blobs(connection_string, container_name, input_dir)
+    download_blobs(connection_string, container_name, input_dir)
     
     
     

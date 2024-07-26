@@ -5,6 +5,7 @@ Date: Nov 2019
 import argparse
 import os
 from data_utils.S3DISDataLoader import S3DISDataset
+from data_utils.DLRGroupDataLoader import DLRGroupDataset
 import torch
 import datetime
 import logging
@@ -16,13 +17,15 @@ from tqdm import tqdm
 import provider
 import numpy as np
 import time
+import pandas as pd
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
-classes = ['ceiling', 'floor', 'wall', 'beam', 'column', 'window', 'door', 'table', 'chair', 'sofa', 'bookcase',
-           'board', 'clutter']
+
+classes = ['Floor', 'Walls', 'Doors', 'Others']
+# Read Labels
 class2label = {cls: i for i, cls in enumerate(classes)}
 seg_classes = class2label
 seg_label_to_cat = {}
@@ -47,13 +50,30 @@ def parse_args():
     parser.add_argument('--npoint', type=int, default=4096, help='Point Number [default: 4096]')
     parser.add_argument('--step_size', type=int, default=10, help='Decay step for lr decay [default: every 10 epochs]')
     parser.add_argument('--lr_decay', type=float, default=0.7, help='Decay rate for lr decay [default: 0.7]')
-    parser.add_argument('--test_area', type=int, default=5, help='Which area to use for test, option: 1-6 [default: 5]')
-    parser.add_argument('--data_dir', type=str, required=True, help='Directory where the data is stored')  # Added argument for data directory
+    # Path to the annotation directory
+    parser.add_argument('--label_path', type=str, required=True, help='Path where the lables file is stored')  # Added argument for label path
 
+    # Path to the annotation directory
+    parser.add_argument('--data_dir', type=str, required=True, help='Directory where the data is stored')  # Added argument for data directory
+    parser.add_argument('--test_project', type=str, required=True, help='Name of the Test Project')  # Added argument for test_poject name
+    parser.add_argument('--data_type', type=str, required=True, help='Type of Data Clustered or Unclustered') 
+    
     return parser.parse_args()
 
 
 def run(args):
+
+    df_label_lookup = pd.read_csv("data_utils/Label_Lookup.csv")
+    dict_label_lookup = df_label_lookup[['Class','Category']].set_index('Category')['Class'].to_dict()
+    # Read Labels
+    with open(args.label_path, 'r') as file:
+        classes = [line.strip() for line in file]
+    class2label = {cls: i for i, cls in enumerate(classes)}
+    seg_classes = class2label
+    seg_label_to_cat = {}
+    for i, cat in enumerate(seg_classes.keys()):
+        seg_label_to_cat[i] = cat
+        
     def log_string(str):
         logger.info(str)
         print(str)
@@ -90,22 +110,25 @@ def run(args):
     log_string(args)
 
     root = args.data_dir  # Use the data directory passed as an argument
-    NUM_CLASSES = 13
+    NUM_CLASSES = len(classes)
     NUM_POINT = args.npoint
     BATCH_SIZE = args.batch_size
 
     print("start loading training data ...")
 
     ## TODO Create a DLR Dataset object that represents our data in the same way that S3DISDataset represents the S3DISDataset
-    TRAIN_DATASET = S3DISDataset(split='train', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
+    
+    TRAIN_DATASET = DLRGroupDataset(split='train', labels_path=args.label_path, data_type=args.data_type, data_root=root, num_point=NUM_POINT, test_project=args.test_project, block_size=30.0, sample_rate=1.0, transform=None)
     print("start loading test data ...")
-    TEST_DATASET = S3DISDataset(split='test', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
+    TEST_DATASET = DLRGroupDataset(split='test', labels_path=args.label_path, data_type=args.data_type, data_root=root, num_point=NUM_POINT, test_project=args.test_project, block_size=30.0, sample_rate=1.0, transform=None)
 
+    
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=0,
                                                   pin_memory=True, drop_last=True,
                                                   worker_init_fn=lambda x: np.random.seed(x + int(time.time())))
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=BATCH_SIZE, shuffle=False, num_workers=0,
                                                  pin_memory=True, drop_last=True)
+    
     weights = torch.Tensor(TRAIN_DATASET.labelweights).cuda()
 
     log_string("The number of training data is: %d" % len(TRAIN_DATASET))

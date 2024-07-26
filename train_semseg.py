@@ -119,12 +119,8 @@ def run(args):
     ## TODO Create a DLR Dataset object that represents our data in the same way that S3DISDataset represents the S3DISDataset
     
     TRAIN_DATASET = DLRGroupDataset(split='train', labels_path=args.label_path, data_type=args.data_type, data_root=root, num_point=NUM_POINT, test_project=args.test_project, block_size=30.0, sample_rate=1.0, transform=None)
-    # TRAIN_DATASET = S3DISDataset(split='train', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
     print("start loading test data ...")
     TEST_DATASET = DLRGroupDataset(split='test', labels_path=args.label_path, data_type=args.data_type, data_root=root, num_point=NUM_POINT, test_project=args.test_project, block_size=30.0, sample_rate=1.0, transform=None)
-    # TRAIN_DATASET = S3DISDataset(split='train', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
-    print("start loading test data ...")
-    # TEST_DATASET = S3DISDataset(split='test', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
 
     
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=0,

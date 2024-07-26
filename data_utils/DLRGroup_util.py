@@ -151,6 +151,6 @@ if __name__ == '__main__':
     output_dir = r'D:\Datasets\PointClouds\nps'
     # Path to the output label directory
 
-    # download_blobs(connection_string, container_name, input_dir)
+    download_blobs(connection_string, container_name, input_dir)
 
     prepare_data(input_dir, output_dir)

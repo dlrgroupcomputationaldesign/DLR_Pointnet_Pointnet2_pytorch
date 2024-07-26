@@ -17,10 +17,20 @@ from tqdm import tqdm
 import provider
 import numpy as np
 import time
+import pandas as pd
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
+
+
+classes = ['Floor', 'Walls', 'Doors', 'Others']
+# Read Labels
+class2label = {cls: i for i, cls in enumerate(classes)}
+seg_classes = class2label
+seg_label_to_cat = {}
+for i, cat in enumerate(seg_classes.keys()):
+    seg_label_to_cat[i] = cat
 
 def inplace_relu(m):
     classname = m.__class__.__name__
@@ -40,10 +50,11 @@ def parse_args():
     parser.add_argument('--npoint', type=int, default=4096, help='Point Number [default: 4096]')
     parser.add_argument('--step_size', type=int, default=10, help='Decay step for lr decay [default: every 10 epochs]')
     parser.add_argument('--lr_decay', type=float, default=0.7, help='Decay rate for lr decay [default: 0.7]')
-    # parser.add_argument('--test_area', type=int, default=5, help='Which area to use for test, option: 1-6 [default: 5]')
+    # Path to the annotation directory
+    parser.add_argument('--label_path', type=str, required=True, help='Path where the lables file is stored')  # Added argument for label path
+
     # Path to the annotation directory
     parser.add_argument('--data_dir', type=str, required=True, help='Directory where the data is stored')  # Added argument for data directory
-    parser.add_argument('--label_path', type=str, required=True, help='Path where the lables file is stored')  # Added argument for label path
     parser.add_argument('--test_project', type=str, required=True, help='Name of the Test Project')  # Added argument for test_poject name
     parser.add_argument('--data_type', type=str, required=True, help='Type of Data Clustered or Unclustered') 
     
@@ -51,7 +62,9 @@ def parse_args():
 
 
 def run(args):
-    
+
+    df_label_lookup = pd.read_csv("data_utils/Label_Lookup.csv")
+    dict_label_lookup = df_label_lookup[['Class','Category']].set_index('Category')['Class'].to_dict()
     # Read Labels
     with open(args.label_path, 'r') as file:
         classes = [line.strip() for line in file]
@@ -60,7 +73,6 @@ def run(args):
     seg_label_to_cat = {}
     for i, cat in enumerate(seg_classes.keys()):
         seg_label_to_cat[i] = cat
-        
         
     def log_string(str):
         logger.info(str)
@@ -110,6 +122,8 @@ def run(args):
     # TRAIN_DATASET = S3DISDataset(split='train', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
     print("start loading test data ...")
     TEST_DATASET = DLRGroupDataset(split='test', labels_path=args.label_path, data_type=args.data_type, data_root=root, num_point=NUM_POINT, test_project=args.test_project, block_size=30.0, sample_rate=1.0, transform=None)
+    # TRAIN_DATASET = S3DISDataset(split='train', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
+    print("start loading test data ...")
     # TEST_DATASET = S3DISDataset(split='test', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
 
     

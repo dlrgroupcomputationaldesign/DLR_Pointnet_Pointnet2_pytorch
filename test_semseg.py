@@ -115,7 +115,6 @@ def main(args):
     NUM_POINT = args.npoint
     BATCH_SIZE = args.batch_size
 
-    # TEST_DATASET_WHOLE_SCENE = DLRGroupDataset(split='test', labels_path=args.label_path, data_type=args.data_type, data_root=args.data_dir, num_point=NUM_POINT, test_project=args.test_project, block_size=30.0, sample_rate=1.0, transform=None)
     TEST_DATASET_WHOLE_SCENE = DLRDatasetWholeScene(args.data_dir, block_points=NUM_POINT, split='test', test_project=args.test_project, stride=15.0, block_size=30.0, padding=0.001, labels_path=args.label_path)
     log_string("The number of test data is: %d" % len(TEST_DATASET_WHOLE_SCENE))
 

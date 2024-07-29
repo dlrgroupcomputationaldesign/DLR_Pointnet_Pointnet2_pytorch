@@ -17,6 +17,20 @@ from tqdm import tqdm
 import provider
 import numpy as np
 
+"""
+Example Parameters
+--model_path D:\Repos\pointnetpytorch\DLR_Pointnet_Pointnet2_pytorch\log\sem_seg\pointnet2_sem_seg\checkpoints\model_no_blead.pth
+--test_project MorrisCollege_Pinson
+--data_type clustered
+--label_path D:\Repos\pointnetpytorch\DLR_Pointnet_Pointnet2_pytorch\data_utils\labels_clean.txt
+--data_dir D:\Datasets\PointClouds\nps
+--log_dir pointnet2_sem_seg
+--output_file D:\Repos\pointnetpytorch\DLR_Pointnet_Pointnet2_pytorch\visualizer\output.csv
+"""
+
+
+
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))

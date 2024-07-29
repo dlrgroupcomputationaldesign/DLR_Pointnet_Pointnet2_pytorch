@@ -43,15 +43,6 @@ class DLRGroupDataset(Dataset):
         # Read Label File
         with open(labels_path, 'r') as file:
             self.labels_length = len([line.strip() for line in file])
-            
-        # # Build Complete path for all .npy files
-        # all_projects = []
-        # for root, dirs, files in os.walk(data_root):
-        #     if data_type in root:
-        #         for file in files:
-        #             if file.endswith('.npy'):
-        #                 full_path = os.path.join(root, file)
-        #                 all_projects.append(full_path)
 
         all_projects = build_complete_paths(data_root, data_type)
         # Split Data Between Train and test

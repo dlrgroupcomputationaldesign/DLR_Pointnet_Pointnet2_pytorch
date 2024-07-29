@@ -19,6 +19,20 @@ import numpy as np
 import time
 import pandas as pd
 
+"""
+Example Parameters
+--log_dir pointnet2_sem_seg
+--test_project MorrisCollege_Pinson
+--batch_size 16
+--data_type clustered
+--label_path D:\Repos\pointnetpytorch\DLR_Pointnet_Pointnet2_pytorch\data_utils\labels_clean.txt
+--data_dir D:\Datasets\PointClouds\nps
+--model_name "model_1"
+"""
+
+
+
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))

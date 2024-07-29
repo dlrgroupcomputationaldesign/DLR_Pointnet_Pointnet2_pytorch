@@ -1,0 +1,7 @@
+Other
+Window
+Door
+Floor
+Roof
+Wall
+Ceiling

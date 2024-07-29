@@ -19,6 +19,20 @@ import numpy as np
 import time
 import pandas as pd
 
+"""
+Example Parameters
+--log_dir pointnet2_sem_seg
+--test_project MorrisCollege_Pinson
+--batch_size 16
+--data_type clustered
+--label_path D:\Repos\pointnetpytorch\DLR_Pointnet_Pointnet2_pytorch\data_utils\labels_clean.txt
+--data_dir D:\Datasets\PointClouds\nps
+--model_name "model_1"
+"""
+
+
+
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
@@ -56,8 +70,9 @@ def parse_args():
     # Path to the annotation directory
     parser.add_argument('--data_dir', type=str, required=True, help='Directory where the data is stored')  # Added argument for data directory
     parser.add_argument('--test_project', type=str, required=True, help='Name of the Test Project')  # Added argument for test_poject name
-    parser.add_argument('--data_type', type=str, required=True, help='Type of Data Clustered or Unclustered') 
-    
+    parser.add_argument('--data_type', type=str, required=True, help='Type of Data Clustered or Unclustered')
+    parser.add_argument('--model_name', type=str, required=True, help='name of the model to be trained')
+
     return parser.parse_args()
 
 
@@ -231,7 +246,7 @@ def run(args):
 
         if epoch % 5 == 0:
             logger.info('Save model...')
-            savepath = str(checkpoints_dir) + '/model.pth'
+            savepath = str(checkpoints_dir) + f'/{args.model_name}.pth'
             log_string('Saving at %s' % savepath)
             state = {
                 'epoch': epoch,

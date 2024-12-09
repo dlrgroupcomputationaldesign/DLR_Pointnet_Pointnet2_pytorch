@@ -8,6 +8,7 @@ import pandas as pd
 from data_utils.S3DISDataLoader import ScannetDatasetWholeScene
 from data_utils.indoor3d_util import g_label2color
 from data_utils.DLRGroupDataLoader import DLRGroupDataset, DLRDatasetWholeScene
+from postprocessing import planer_cluster, vote_cluster
 import torch
 import logging
 from pathlib import Path
@@ -191,7 +192,12 @@ def main(args):
             df_whole_scene_data_with_labels = pd.DataFrame(whole_scene_data_with_labels)
             df_whole_scene_data_with_labels.columns = ["x", "y", "z", "r", "g", "b", "l"]
             df_whole_scene_data_with_labels['Room'] = whole_scene_rooms['Room']
+            #  Cluster by plane and vote
+            # df_whole_scene_data_with_labels_clustered = planer_cluster(df_whole_scene_data_with_labels)
+            # df_whole_scene_data_with_labels_clean = vote_cluster(df_whole_scene_data_with_labels_clustered)
+
             df_whole_scene_data_with_labels.to_csv(args.output_file)
+
             for sub in [0.5, 0.3, 0.1]:
                 df_whole_scene_data_with_labels.sample(int(sub * df_whole_scene_data_with_labels.shape[0])).to_csv(args.output_file.split(".")[0] + f"_small_{sub}_.csv")
 

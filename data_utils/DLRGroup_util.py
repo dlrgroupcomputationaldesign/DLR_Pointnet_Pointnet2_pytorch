@@ -7,6 +7,7 @@ import pandas as pd
 from azure.storage.blob import BlobServiceClient
 from dotenv import load_dotenv
 
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -41,6 +42,7 @@ def create_labels(anno_path, project_folder, filename, lookup_path):
         df = pd.read_csv(anno_path)
 
         points_list = []
+        rooms_list = []
         if required_columns.issubset(df.columns):
             df['ElementType'] = [lookup[v] for v in df['ElementType']]
             # All Unique labels
@@ -52,15 +54,19 @@ def create_labels(anno_path, project_folder, filename, lookup_path):
                     filter_df = df[df["ElementType"] == element_type]
                     data = filter_df[['X', 'Y', 'Z', 'R', 'G', 'B']].values
                     labels = np.ones((data.shape[0], 1)) * class2label[element_type]
-                    points_list.append(np.concatenate([data, labels], 1))  # Nx7
+                    points_list.append(np.concatenate([data, labels], 1))
+                    # Nx7
+                    rooms_list.append(filter_df['Room'])
 
             data_label = np.concatenate(points_list, 0).astype(np.float64)  # Convert it to float 64
+            df_rooms = pd.concat(rooms_list)
             # Get min value for XYZ along axis 0
             xyz_min = np.amin(data_label, axis=0)[0:3]
             # Less min value from points
             data_label[:, 0:3] -= xyz_min
             output_filename = os.path.join(project_folder, filename)
             np.save(output_filename + '.npy', data_label)
+            df_rooms.to_csv(output_filename + "_rooms.csv")
             logging.info(f"Saved {output_filename}")
 
 
@@ -151,6 +157,6 @@ if __name__ == '__main__':
     output_dir = r'D:\Datasets\PointClouds\nps'
     # Path to the output label directory
 
-    download_blobs(connection_string, container_name, input_dir)
+    # download_blobs(connection_string, container_name, input_dir)
 
     prepare_data(input_dir, output_dir)

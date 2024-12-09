@@ -4,8 +4,11 @@ Date: Nov 2019
 """
 import argparse
 import os
+import pandas as pd
 from data_utils.S3DISDataLoader import ScannetDatasetWholeScene
 from data_utils.indoor3d_util import g_label2color
+from data_utils.DLRGroupDataLoader import DLRGroupDataset, DLRDatasetWholeScene
+from postprocessing import planer_cluster, vote_cluster
 import torch
 import logging
 from pathlib import Path
@@ -14,6 +17,20 @@ import importlib
 from tqdm import tqdm
 import provider
 import numpy as np
+
+"""
+Example Parameters
+--model_path D:\Repos\pointnetpytorch\DLR_Pointnet_Pointnet2_pytorch\log\sem_seg\pointnet2_sem_seg\checkpoints\model_no_blead.pth
+--test_project MorrisCollege_Pinson
+--data_type clustered
+--label_path D:\Repos\pointnetpytorch\DLR_Pointnet_Pointnet2_pytorch\data_utils\labels_clean.txt
+--data_dir D:\Datasets\PointClouds\nps
+--log_dir pointnet2_sem_seg
+--output_file D:\Repos\pointnetpytorch\DLR_Pointnet_Pointnet2_pytorch\visualizer\output.csv
+"""
+
+
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
@@ -31,13 +48,25 @@ for i, cat in enumerate(seg_classes.keys()):
 def parse_args():
     '''PARAMETERS'''
     parser = argparse.ArgumentParser('Model')
+    parser.add_argument("--model_path", type=str, help="Path to the model you would like to test")
+    parser.add_argument('--model', type=str, default='pointnet_sem_seg', help='model name [default: pointnet_sem_seg]')
+    parser.add_argument('--npoint', type=int, default=4096, help='Point Number [default: 4096]')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size in testing [default: 32]')
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device')
     parser.add_argument('--num_point', type=int, default=4096, help='point number [default: 4096]')
     parser.add_argument('--log_dir', type=str, required=True, help='experiment root')
     parser.add_argument('--visual', action='store_true', default=False, help='visualize result [default: False]')
-    parser.add_argument('--test_area', type=int, default=5, help='area for testing, option: 1-6 [default: 5]')
     parser.add_argument('--num_votes', type=int, default=3, help='aggregate segmentation scores with voting [default: 5]')
+    parser.add_argument('--label_path', type=str, required=True,
+                        help='Path where the lables file is stored')  # Added argument for label path
+
+    # Path to the annotation directory
+    parser.add_argument('--data_dir', type=str, required=True,
+                        help='Directory where the data is stored')  # Added argument for data directory
+    parser.add_argument('--test_project', type=str, required=True,
+                        help='Name of the Test Project')  # Added argument for test_poject name
+    parser.add_argument('--data_type', type=str, required=True, help='Type of Data Clustered or Unclustered')
+    parser.add_argument('--output_file', type=str, required=True, help='csv of labeled point cloud')
     return parser.parse_args()
 
 
@@ -75,20 +104,25 @@ def main(args):
     log_string('PARAMETER ...')
     log_string(args)
 
-    NUM_CLASSES = 13
+    with open(args.label_path, 'r') as file:
+        classes = [line.strip() for line in file]
+    class2label = {cls: i for i, cls in enumerate(classes)}
+    seg_classes = class2label
+    seg_label_to_cat = {}
+    for i, cat in enumerate(seg_classes.keys()):
+        seg_label_to_cat[i] = cat
+
+    NUM_CLASSES = len(classes)
+    NUM_POINT = args.npoint
     BATCH_SIZE = args.batch_size
-    NUM_POINT = args.num_point
 
-    root = 'data/s3dis/stanford_indoor3d/'
-
-    TEST_DATASET_WHOLE_SCENE = ScannetDatasetWholeScene(root, split='test', test_area=args.test_area, block_points=NUM_POINT)
+    TEST_DATASET_WHOLE_SCENE = DLRDatasetWholeScene(args.data_dir, block_points=NUM_POINT, split='test', test_project=args.test_project, stride=15.0, block_size=30.0, padding=0.001, labels_path=args.label_path)
     log_string("The number of test data is: %d" % len(TEST_DATASET_WHOLE_SCENE))
 
     '''MODEL LOADING'''
-    model_name = os.listdir(experiment_dir + '/logs')[0].split('.')[0]
-    MODEL = importlib.import_module(model_name)
+    MODEL = importlib.import_module(args.model)
     classifier = MODEL.get_model(NUM_CLASSES).cuda()
-    checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model_fromrepo.pth')
+    checkpoint = torch.load(args.model_path)
     classifier.load_state_dict(checkpoint['model_state_dict'])
     classifier = classifier.eval()
 
@@ -114,6 +148,7 @@ def main(args):
 
             whole_scene_data = TEST_DATASET_WHOLE_SCENE.scene_points_list[batch_idx]
             whole_scene_label = TEST_DATASET_WHOLE_SCENE.semantic_labels_list[batch_idx]
+            whole_scene_rooms = TEST_DATASET_WHOLE_SCENE.room_labels_list[batch_idx]
             vote_label_pool = np.zeros((whole_scene_label.shape[0], NUM_CLASSES))
             for _ in tqdm(range(args.num_votes), total=args.num_votes):
                 scene_data, scene_label, scene_smpw, scene_point_index = TEST_DATASET_WHOLE_SCENE[batch_idx]
@@ -146,6 +181,25 @@ def main(args):
                                                batch_smpw[0:real_batch_size, ...])
 
             pred_label = np.argmax(vote_label_pool, 1)
+            # Assuming whole_scene_data and pred_label are already defined numpy arrays
+            # Reshape pred_label to match the dimensions required for hstack
+            pred_label_reshaped = pred_label.reshape(-1, 1)
+
+            # Concatenate the arrays horizontally
+            whole_scene_data_with_labels = np.hstack((whole_scene_data, pred_label_reshaped))
+
+            # output data with labels
+            df_whole_scene_data_with_labels = pd.DataFrame(whole_scene_data_with_labels)
+            df_whole_scene_data_with_labels.columns = ["x", "y", "z", "r", "g", "b", "l"]
+            df_whole_scene_data_with_labels['Room'] = whole_scene_rooms['Room']
+            #  Cluster by plane and vote
+            # df_whole_scene_data_with_labels_clustered = planer_cluster(df_whole_scene_data_with_labels)
+            # df_whole_scene_data_with_labels_clean = vote_cluster(df_whole_scene_data_with_labels_clustered)
+
+            df_whole_scene_data_with_labels.to_csv(args.output_file)
+
+            for sub in [0.5, 0.3, 0.1]:
+                df_whole_scene_data_with_labels.sample(int(sub * df_whole_scene_data_with_labels.shape[0])).to_csv(args.output_file.split(".")[0] + f"_small_{sub}_.csv")
 
             for l in range(NUM_CLASSES):
                 total_seen_class_tmp[l] += np.sum((whole_scene_label == l))
@@ -155,7 +209,7 @@ def main(args):
                 total_correct_class[l] += total_correct_class_tmp[l]
                 total_iou_deno_class[l] += total_iou_deno_class_tmp[l]
 
-            iou_map = np.array(total_correct_class_tmp) / (np.array(total_iou_deno_class_tmp, dtype=np.float) + 1e-6)
+            iou_map = np.array(total_correct_class_tmp) / (np.array(total_iou_deno_class_tmp, dtype=np.float32) + 1e-6)
             print(iou_map)
             arr = np.array(total_seen_class_tmp)
             tmp_iou = np.mean(iou_map[arr != 0])
@@ -182,7 +236,7 @@ def main(args):
                 fout.close()
                 fout_gt.close()
 
-        IoU = np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float) + 1e-6)
+        IoU = np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float32) + 1e-6)
         iou_per_class_str = '------- IoU --------\n'
         for l in range(NUM_CLASSES):
             iou_per_class_str += 'class %s, IoU: %.3f \n' % (
@@ -191,7 +245,7 @@ def main(args):
         log_string(iou_per_class_str)
         log_string('eval point avg class IoU: %f' % np.mean(IoU))
         log_string('eval whole scene point avg class acc: %f' % (
-            np.mean(np.array(total_correct_class) / (np.array(total_seen_class, dtype=np.float) + 1e-6))))
+            np.mean(np.array(total_correct_class) / (np.array(total_seen_class, dtype=np.float32) + 1e-6))))
         log_string('eval whole scene point accuracy: %f' % (
                 np.sum(total_correct_class) / float(np.sum(total_seen_class) + 1e-6)))
 

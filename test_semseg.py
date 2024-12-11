@@ -8,7 +8,7 @@ import pandas as pd
 from data_utils.S3DISDataLoader import ScannetDatasetWholeScene
 from data_utils.indoor3d_util import g_label2color
 from data_utils.DLRGroupDataLoader import DLRGroupDataset, DLRDatasetWholeScene
-from postprocessing import planer_cluster, vote_cluster
+from processing import planer_cluster, vote_cluster
 import torch
 import logging
 from pathlib import Path
@@ -120,7 +120,7 @@ def main(args):
     log_string("The number of test data is: %d" % len(TEST_DATASET_WHOLE_SCENE))
 
     '''MODEL LOADING'''
-    MODEL = importlib.import_module(args.model)
+    MODEL =
     classifier = MODEL.get_model(NUM_CLASSES).cuda()
     checkpoint = torch.load(args.model_path)
     classifier.load_state_dict(checkpoint['model_state_dict'])
@@ -193,13 +193,13 @@ def main(args):
             df_whole_scene_data_with_labels.columns = ["x", "y", "z", "r", "g", "b", "l"]
             df_whole_scene_data_with_labels['Room'] = whole_scene_rooms['Room']
             #  Cluster by plane and vote
-            # df_whole_scene_data_with_labels_clustered = planer_cluster(df_whole_scene_data_with_labels)
-            # df_whole_scene_data_with_labels_clean = vote_cluster(df_whole_scene_data_with_labels_clustered)
+            df_whole_scene_data_with_labels_clustered = planer_cluster(df_whole_scene_data_with_labels)
+            df_whole_scene_data_with_labels_clean = vote_cluster(df_whole_scene_data_with_labels_clustered)
 
-            df_whole_scene_data_with_labels.to_csv(args.output_file)
+            df_whole_scene_data_with_labels_clean.to_csv(args.output_file)
 
             for sub in [0.5, 0.3, 0.1]:
-                df_whole_scene_data_with_labels.sample(int(sub * df_whole_scene_data_with_labels.shape[0])).to_csv(args.output_file.split(".")[0] + f"_small_{sub}_.csv")
+                df_whole_scene_data_with_labels_clean.sample(int(sub * df_whole_scene_data_with_labels_clean.shape[0])).to_csv(args.output_file.split(".")[0] + f"_small_{sub}_.csv")
 
             for l in range(NUM_CLASSES):
                 total_seen_class_tmp[l] += np.sum((whole_scene_label == l))

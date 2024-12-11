@@ -148,7 +148,7 @@ class DLRGroupDataset(Dataset):
 
 class DLRDatasetWholeScene():
     # prepare to give prediction on each points
-    def __init__(self, root, block_points=4096, split='test', test_project="MorrisCollege_Pinson", stride=15.0, block_size=30.0, padding=0.001, data_type='clustered', labels_path="data_utils/labels_clean.txt"):
+    def __init__(self, root, block_points=4096, split='test', test_project="MorrisCollege_Pinson", stride=15.0, block_size=100.0, padding=0.001, data_type='clustered', labels_path="data_utils/labels_clean.txt"):
         self.block_points = block_points
         self.block_size = block_size
         self.padding = padding
@@ -242,6 +242,84 @@ class DLRDatasetWholeScene():
 
     def __len__(self):
         return len(self.scene_points_list)
+
+
+class DLRGroupDatasetWholeScenePoints(Dataset):
+    def __init__(self, labels_path, test_project, split='train', data_root='trainval_fullarea',
+                 data_type="clustered", num_point=4096, block_size=2.0,
+                 sample_rate=1.0, transform=None):
+        super().__init__()
+
+        self.num_point = num_point
+        self.block_size = block_size
+        self.transform = transform
+        # Read Label File
+        with open(labels_path, 'r') as file:
+            self.labels_length = len([line.strip() for line in file])
+
+        all_projects = build_complete_paths(data_root, data_type)
+        # Split Data Between Train and test
+        if split == 'train':
+            projects_split = []
+            for project in all_projects:
+                basename = os.path.basename(project)[:-4]
+                if basename != test_project:  # Test Project is the name of the project we need to test on eg. 00-10231-20_CortevaYork
+                    projects_split.append(project)
+        else:
+            projects_split = []
+            for project in all_projects:
+                basename = os.path.basename(project)[:-4]
+                if basename == test_project:
+                    projects_split.append(project)
+
+        self.room_points, self.room_labels = [], []
+        # Coord Min and Max
+        self.room_coord_min, self.room_coord_max = [], []
+        # All Number of points
+        num_point_all = []
+        # Class Weights
+        labelweights = np.zeros(self.labels_length)
+        # Iterate over each Room
+        for room_path in tqdm(projects_split, total=len(projects_split)):
+            # Load Room We are Considering One csv file as a Room / Project
+            room_data = np.load(room_path)  # xyzrgbl, N*7
+
+            points, labels = room_data[:, 0:6], room_data[:, 6]  # xyzrgb, N*6; l, N
+            # Return distribution of labels
+            tmp, _ = np.histogram(labels, range(self.labels_length + 1))
+            # Add to labelweights
+            labelweights += tmp
+            # Calculate min and max for points
+            coord_min, coord_max = np.amin(points, axis=0)[:3], np.amax(points, axis=0)[:3]
+            self.room_points.append(points), self.room_labels.append(labels)
+            self.room_coord_min.append(coord_min), self.room_coord_max.append(coord_max)
+            num_point_all.append(labels.size)
+
+        labelweights = labelweights.astype(np.float32)
+        labelweights = labelweights / np.sum(labelweights)
+        self.labelweights = np.power(np.amax(labelweights) / labelweights, 1 / 3.0)
+
+        sample_prob = num_point_all / np.sum(num_point_all)
+        num_iter = int(np.sum(num_point_all) * sample_rate / num_point)
+        room_idxs = []
+        for index in range(len(projects_split)):
+            if num_point_all[index] < 100_000:
+                pass
+            else:
+                room_idxs.extend([index] * int(round(sample_prob[index] * num_iter)))
+        self.room_idxs = np.array(room_idxs)
+        print("Totally {} samples in {} set.".format(len(self.room_idxs), split))
+
+    def __getitem__(self, idx):
+        room_idx = self.room_idxs[idx]
+        points = self.room_points[idx]  # N * 6
+        labels = self.room_labels[idx]  # N
+        N_points = points.shape[0]
+
+        return points
+
+    def __len__(self):
+        return len(self.room_idxs)
 
 
 if __name__ == '__main__':

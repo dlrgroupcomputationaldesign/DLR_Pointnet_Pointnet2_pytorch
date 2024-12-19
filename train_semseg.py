@@ -52,11 +52,13 @@ def parse_args():
     parser.add_argument('--lr_decay', type=float, default=0.7, help='Decay rate for lr decay [default: 0.7]')
     # Path to the annotation directory
     parser.add_argument('--label_path', type=str, required=True, help='Path where the lables file is stored')  # Added argument for label path
+    parser.add_argument('--model_name', type=str, required=True, help='Path where the lables file is stored')  # Added argument for label path
 
     # Path to the annotation directory
     parser.add_argument('--data_dir', type=str, required=True, help='Directory where the data is stored')  # Added argument for data directory
     parser.add_argument('--test_project', type=str, required=True, help='Name of the Test Project')  # Added argument for test_poject name
-    parser.add_argument('--data_type', type=str, required=True, help='Type of Data Clustered or Unclustered') 
+    parser.add_argument('--data_type', type=str, required=True, help='Type of Data Clustered or Unclustered')
+    parser.add_argument('--block_size', type=float, default=2.0, help='Block Size [default: 2.0]')
     
     return parser.parse_args()
 
@@ -114,13 +116,14 @@ def run(args):
     NUM_POINT = args.npoint
     BATCH_SIZE = args.batch_size
 
+
     print("start loading training data ...")
 
     ## TODO Create a DLR Dataset object that represents our data in the same way that S3DISDataset represents the S3DISDataset
     
-    TRAIN_DATASET = DLRGroupDataset(split='train', labels_path=args.label_path, data_type=args.data_type, data_root=root, num_point=NUM_POINT, test_project=args.test_project, block_size=30.0, sample_rate=1.0, transform=None)
+    TRAIN_DATASET = DLRGroupDataset(split='train', labels_path=args.label_path, data_type=args.data_type, data_root=root, num_point=NUM_POINT, test_project=args.test_project, block_size=100.0, sample_rate=1.0, transform=None)
     print("start loading test data ...")
-    TEST_DATASET = DLRGroupDataset(split='test', labels_path=args.label_path, data_type=args.data_type, data_root=root, num_point=NUM_POINT, test_project=args.test_project, block_size=30.0, sample_rate=1.0, transform=None)
+    TEST_DATASET = DLRGroupDataset(split='test', labels_path=args.label_path, data_type=args.data_type, data_root=root, num_point=NUM_POINT, test_project=args.test_project, block_size=100.0, sample_rate=1.0, transform=None)
 
     
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=0,
@@ -231,7 +234,7 @@ def run(args):
 
         if epoch % 5 == 0:
             logger.info('Save model...')
-            savepath = str(checkpoints_dir) + '/model.pth'
+            savepath = str(checkpoints_dir) + f'/{args.model_name}.pth'
             log_string('Saving at %s' % savepath)
             state = {
                 'epoch': epoch,
@@ -301,7 +304,7 @@ def run(args):
             if mIoU >= best_iou:
                 best_iou = mIoU
                 logger.info('Save model...')
-                savepath = str(checkpoints_dir) + '/best_model_fromrepo.pth'
+                savepath = str(checkpoints_dir) + f'/best_model_{args.model_name}.pth'
                 log_string('Saving at %s' % savepath)
                 state = {
                     'epoch': epoch,

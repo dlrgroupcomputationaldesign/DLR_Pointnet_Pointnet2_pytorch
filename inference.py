@@ -211,6 +211,6 @@ if __name__ == "__main__":
 
     df = postprocess(df)
 
-
-    df.to_csv("Morriscollge_Pinson_Output.csv")
+    df = df[df['Floor'] == "Floor_1"]
+    df.to_csv("Morriscollge_Pinson_Output_02032024_Floor1.csv")
     print('done')

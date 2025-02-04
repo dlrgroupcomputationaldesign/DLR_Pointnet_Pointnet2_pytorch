@@ -13,8 +13,8 @@ import plotly.io as pio
 import plotly.graph_objects as go
 
 def detect_and_label_walls(df):
-    plot_floor_gram = False
-    plot_floors = False
+    plot_floor_gram = True
+    plot_floors = True
     # Compute histogram for 'z' values of floors
     hist, bin_edges = np.histogram(df['z'], bins=150)
 
@@ -109,7 +109,8 @@ def detect_and_label_walls(df):
                 font=dict(size=12)
             ))
 
-        # fig.show()
+        # if plot_floors == True:
+        #     fig.show()
 
 
         print(f"Floor has {floor_df.shape} points")
@@ -144,7 +145,8 @@ def detect_and_label_walls(df):
         plt.xlabel('Pixel Value')
         plt.ylabel('Frequency')
         plt.grid(axis='y', linestyle='--', alpha=0.7)
-        # plt.show()
+        if plot_floors == True:
+            plt.show()
 
         kernel_size = 5
         blur_gray = cv2.GaussianBlur(hist_xy,(kernel_size, kernel_size),0)
@@ -168,9 +170,9 @@ def detect_and_label_walls(df):
 
         rho = 1  # distance resolution in pixels of the Hough grid
         theta = np.pi / 180  # angular resolution in radians of the Hough grid
-        threshold = 15  # minimum number of votes (intersections in Hough grid cell)
+        threshold = 1  # minimum number of votes (intersections in Hough grid cell)
         min_line_length = 3  # minimum number of pixels making up a line
-        max_line_gap = 20  # maximum gap in pixels between connectable line segments
+        max_line_gap = 2  # maximum gap in pixels between connectable line segments
         line_image = np.copy(hist_xy) * 0  # creating a blank to draw lines on
 
         # Run Hough on edge detected image
@@ -178,19 +180,32 @@ def detect_and_label_walls(df):
         lines = cv2.HoughLinesP(edges, rho, theta, threshold, np.array([]),
                             min_line_length, max_line_gap)
 
+        orthogonal_lines = []
+        if lines is not None:
+            for line in lines:
+                for x1, y1, x2, y2 in line:
+                    # Calculate the angle of the line in degrees
+                    if x2 - x1 == 0:  # Vertical line (90 degrees)
+                        orthogonal_lines.append([x1, y1, x2, y2])
+                    else:
+                        angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi  # Convert to degrees
+                        if abs(angle) < 3 or abs(angle - 90) < 3:  # Accept near 0° (horizontal) or 90° (vertical)
+                            orthogonal_lines.append((x1, y1, x2, y2))
+
         # Plot hist_xy with lines drawn over it
         plt.figure(figsize=(12, 6))
-        # plt.imshow(hist_xy, cmap='gray')
+        plt.imshow(hist_xy, cmap='gray')
 
         # Draw the lines with blue and endpoints with red
-        for line in lines:
-            for x1, y1, x2, y2 in line:
-                plt.plot([x1, x2], [y1, y2], color='blue', linewidth=2)  # Line in blue
-                plt.scatter([x1, x2], [y1, y2], color='red', zorder=5)  # Endpoints in red
+        for line in orthogonal_lines:
+            x1, y1, x2, y2 = line
+            plt.plot([x1, x2], [y1, y2], color='blue', linewidth=2)  # Line in blue
+            plt.scatter([x1, x2], [y1, y2], color='red', zorder=5)  # Endpoints in red
 
         plt.axis('off')
         plt.title('Lines Over Histogram')
-        # plt.show()
+        if plot_floors == True:
+            plt.show()
 
 
         # now run it again on the line image
@@ -521,6 +536,7 @@ def detect_and_label_walls(df):
         # fig.show()
         print('hi')
 
+        floor_df['Floor'] = fig_i
 
         dfs.append(floor_df)
 

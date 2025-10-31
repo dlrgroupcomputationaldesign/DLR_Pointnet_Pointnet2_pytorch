@@ -32,7 +32,7 @@ def create_labels(anno_path, project_folder, filename, lookup_path):
     classes = pd.Series(list(lookup.values())).unique()
     class2label = {cls: i for i, cls in enumerate(classes)}
     required_columns = {'X', 'Y', 'Z', 'R', 'G', 'B', 'ElementType'}
-    with open('labels_clean.txt', 'w') as file:
+    with open('labels_clean2.txt', 'w') as file:
         for item in classes:
             file.write(f"{item}\n")
 
@@ -97,7 +97,7 @@ def prepare_data(input_dir, output_dir):
                 if not os.path.exists(annot_folder):
                     os.makedirs(annot_folder)
 
-                create_labels(file_path, annot_folder, out_filename, "Label_Lookup.csv")
+                create_labels(file_path, annot_folder, out_filename, "Label_Lookup2.csv")
 
 
 # -------------------------------------------------------------------------------------------------------
@@ -146,9 +146,9 @@ if __name__ == '__main__':
     container_name = os.getenv("CONTAINER_NAME")
 
     # Path to the input csv Directory where we want to download both clustered and unclustered data
-    input_dir = r'D:\Datasets\PointClouds\csvs'
+    input_dir = r'Datasets\PointClouds\csvs'
     # Path to the Output Directory
-    output_dir = r'D:\Datasets\PointClouds\nps'
+    output_dir = r'Datasets\PointClouds\nps2'
     # Path to the output label directory
 
     download_blobs(connection_string, container_name, input_dir)

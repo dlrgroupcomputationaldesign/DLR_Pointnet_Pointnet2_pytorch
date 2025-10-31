@@ -36,7 +36,7 @@ class DLRGroupDataset(Dataset):
         # Build Complete path for all .npy files
         all_projects = []
         for root, dirs, files in os.walk(data_root):
-            if data_type in root:
+            if f"\{data_type}" in root or data_type == 'all':
                 for file in files:
                     if file.endswith('.npy'):
                         full_path = os.path.join(root, file)
@@ -47,7 +47,7 @@ class DLRGroupDataset(Dataset):
             projects_split = []
             for project in all_projects:
                 basename = os.path.basename(project)[:-4]
-                if basename != test_project:  # Test Project is the name of the project we need to test on eg. 00-10231-20_CortevaYork
+                if test_project not in basename:   # Test Project is the name of the project we need to test on eg. 00-10231-20_CortevaYork
                     projects_split.append(project)
         else:
             projects_split = []
@@ -81,6 +81,9 @@ class DLRGroupDataset(Dataset):
 
         labelweights = labelweights.astype(np.float32)
         labelweights = labelweights / np.sum(labelweights)
+        labelweights_str = ", ".join(f"{p:.1f}%" for p in np.round(labelweights * 100, 1))
+        print(f"Quantity precentage of each label: {labelweights_str}")
+        
         self.labelweights = np.power(np.amax(labelweights) / labelweights, 1 / 3.0)
 
         sample_prob = num_point_all / np.sum(num_point_all)
@@ -156,9 +159,9 @@ class DLRDatasetWholeScene():
         self.scene_points_num = []
         assert split in ['train', 'test']
         if self.split == 'train':
-            self.file_list = [d for d in os.listdir(f"{root}/{data_type}") if d.find(test_project) is not -1]
+            self.file_list = [d for d in os.listdir(f"{root}/{data_type}") if d.find(test_project) != -1]
         else:
-            self.file_list = [d for d in os.listdir(f"{root}/{data_type}/{test_project}") if d.find(test_project) is not -1]
+            self.file_list = [d for d in os.listdir(f"{root}/{data_type}/{test_project}") if d.find(test_project) != -1]
         self.scene_points_list = []
         self.semantic_labels_list = []
         self.room_labels_list = []

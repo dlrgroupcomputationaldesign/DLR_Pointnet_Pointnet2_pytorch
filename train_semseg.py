@@ -39,7 +39,7 @@ def inplace_relu(m):
 
 def parse_args():
     parser = argparse.ArgumentParser('Model')
-    parser.add_argument('--model', type=str, default='pointnet_sem_seg', help='model name [default: pointnet_sem_seg]')
+    parser.add_argument('--model', type=str, default='pointnet', help='model name [default: pointnet]')
     parser.add_argument('--batch_size', type=int, default=16, help='Batch Size during training [default: 16]')
     parser.add_argument('--epoch', default=32, type=int, help='Epoch to run [default: 32]')
     parser.add_argument('--learning_rate', default=0.001, type=float, help='Initial learning rate [default: 0.001]')
@@ -52,12 +52,12 @@ def parse_args():
     parser.add_argument('--lr_decay', type=float, default=0.7, help='Decay rate for lr decay [default: 0.7]')
     # Path to the annotation directory
     parser.add_argument('--label_path', type=str, required=True, help='Path where the lables file is stored')  # Added argument for label path
-    parser.add_argument('--model_name', type=str, required=True, help='Path where the lables file is stored')  # Added argument for label path
+    parser.add_argument('--model_name', type=str, required=True, help='Path where the saved model is stored')  # Added argument for label path
 
     # Path to the annotation directory
     parser.add_argument('--data_dir', type=str, required=True, help='Directory where the data is stored')  # Added argument for data directory
     parser.add_argument('--test_project', type=str, required=True, help='Name of the Test Project')  # Added argument for test_poject name
-    parser.add_argument('--data_type', type=str, required=True, help='Type of Data Clustered or Unclustered')
+    parser.add_argument('--data_type', type=str, required=True, help='Type of Data Clustered or Unclustered or all') # Added argument for clustered data, unclustered data or include both
     parser.add_argument('--block_size', type=float, default=2.0, help='Block Size [default: 2.0]')
     
     return parser.parse_args()
@@ -65,7 +65,7 @@ def parse_args():
 
 def run(args):
 
-    df_label_lookup = pd.read_csv("data_utils/Label_Lookup.csv")
+    df_label_lookup = pd.read_csv("data_utils/Label_Lookup2.csv")
     dict_label_lookup = df_label_lookup[['Class','Category']].set_index('Category')['Class'].to_dict()
     # Read Labels
     with open(args.label_path, 'r') as file:
@@ -138,9 +138,9 @@ def run(args):
     log_string("The number of test data is: %d" % len(TEST_DATASET))
 
     '''MODEL LOADING'''
-    MODEL = importlib.import_module(args.model)
-    shutil.copy('models/%s.py' % args.model, str(experiment_dir))
-    shutil.copy('models/pointnet2_utils.py', str(experiment_dir))
+    MODEL = importlib.import_module('%s_sem_seg' % args.model)
+    shutil.copy('models/%s_sem_seg.py' % args.model, str(experiment_dir))
+    shutil.copy('models/%s_utils.py' % args.model, str(experiment_dir))
 
     classifier = MODEL.get_model(NUM_CLASSES).cuda()
     criterion = MODEL.get_loss().cuda()

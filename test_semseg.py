@@ -21,9 +21,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
-classes = ['ceiling', 'floor', 'wall', 'beam', 'column', 'window', 'door', 'table', 'chair', 'sofa', 'bookcase',
-           'board', 'clutter']
-class2label = {cls: i for i, cls in enumerate(classes)}
+# Read the label file
+with open("data_utils\labels_clean2.txt", "r") as file:
+    labels = [line.strip() for line in file.readlines()]  # Read and clean lines
+
+# Create dictionary mapping labels to numeric values
+class2label = {label: idx for idx, label in enumerate(labels)}
+
 seg_classes = class2label
 seg_label_to_cat = {}
 for i, cat in enumerate(seg_classes.keys()):
@@ -33,6 +37,7 @@ for i, cat in enumerate(seg_classes.keys()):
 def parse_args():
     '''PARAMETERS'''
     parser = argparse.ArgumentParser('Model')
+    parser.add_argument('--model', type=str, default='pointnet', help='model name [default: pointnet]')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size in testing [default: 32]')
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device')
     parser.add_argument('--num_point', type=int, default=4096, help='point number [default: 4096]')
@@ -41,6 +46,9 @@ def parse_args():
     parser.add_argument('--test_project', type=str, default="MorrisCollege_Pinson", help='area for testing, option: 1-6 [default: 5]')
     parser.add_argument('--num_votes', type=int, default=3, help='aggregate segmentation scores with voting [default: 5]')
     parser.add_argument('--data_type', type=str, default='clustered')
+    parser.add_argument('--data_dir', type=str, required=True, help='Directory where the data is stored') 
+    parser.add_argument('--label_path', type=str, required=True, help='Path where the lables file is stored')
+    parser.add_argument('--trained_model', type=str, required=True, help='Name of trained model')
 
     return parser.parse_args()
 
@@ -56,6 +64,10 @@ def add_vote(vote_label_pool, point_idx, pred_label, weight):
 
 
 def main(args):
+    # Read Labels
+    with open(args.label_path, 'r') as file:
+        classes = [line.strip() for line in file]
+
     def log_string(str):
         logger.info(str)
         print(str)
@@ -79,20 +91,24 @@ def main(args):
     log_string('PARAMETER ...')
     log_string(args)
 
-    NUM_CLASSES = 7
-    BATCH_SIZE = 16
+    NUM_CLASSES = len(classes)
+    BATCH_SIZE = args.batch_size
     NUM_POINT = args.num_point
 
     root = 'data/s3dis/stanford_indoor3d/'
 
-    TEST_DATASET_WHOLE_SCENE = DLRDatasetWholeScene(root=r"D:\Datasets\PointClouds\nps" , block_points=NUM_POINT, split='test', test_project="MorrisCollege_Pinson", stride=15.0, block_size=100.0, padding=0.001, labels_path="D:\Repos\pointnetpytorch\DLR_Pointnet_Pointnet2_pytorch\data_utils\labels_clean.txt")
+    # TEST_DATASET_WHOLE_SCENE = DLRDatasetWholeScene(root=r"D:\Datasets\PointClouds\nps" , block_points=NUM_POINT, split='test', test_project="MorrisCollege_Pinson", stride=15.0, block_size=100.0, padding=0.001, labels_path="D:\Repos\pointnetpytorch\DLR_Pointnet_Pointnet2_pytorch\data_utils\labels_clean.txt")
+    TEST_DATASET_WHOLE_SCENE = DLRDatasetWholeScene(root=args.data_dir , block_points=NUM_POINT, split='test', test_project=args.test_project, stride=15.0, block_size=100.0, padding=0.001, labels_path=args.label_path)
+    
     log_string("The number of test data is: %d" % len(TEST_DATASET_WHOLE_SCENE))
 
     '''MODEL LOADING'''
-    model_name = "pointnet2_sem_seg"
-    MODEL = importlib.import_module(model_name)
+    MODEL = importlib.import_module('%s_sem_seg' % args.model)
     classifier = MODEL.get_model(NUM_CLASSES).cuda()
-    checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model_BolaModel_30_epoch_blocksize_100.pth')
+    name = str(experiment_dir) + '/checkpoints/'+ args.trained_model
+    print('name', name)
+
+    checkpoint = torch.load(str(experiment_dir) + '/checkpoints/'+ args.trained_model)
     classifier.load_state_dict(checkpoint['model_state_dict'])
     classifier = classifier.eval()
 
@@ -205,7 +221,7 @@ def main(args):
         df_data["gt_label"] = whole_scene_label
         df_data["pred_label"] = pred_label
 
-        df_data.to_csv(f'MorrisCollege_Pinson_Output_Weds.csv', index=False)
+        df_data.to_csv(f'{args.test_project}_Output.csv', index=False)
 if __name__ == '__main__':
     args = parse_args()
     main(args)

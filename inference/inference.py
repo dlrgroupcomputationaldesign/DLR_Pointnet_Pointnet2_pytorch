@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import logging
 from pathlib import Path
@@ -8,216 +6,186 @@ import numpy as np
 import pandas as pd
 import torch
 from tqdm import tqdm
+import os
+import numpy as np
+import pandas as pd
+import sys
 
-from data_utils.DLRGroupDataLoader import DLRDatasetWholeScene
-from data_utils.indoor3d_util import g_label2color
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = BASE_DIR
 
+sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
 def add_vote(vote_label_pool, point_idx, pred_label, weight):
-    B = pred_label.shape[0]
-    N = pred_label.shape[1]
+    B, N = pred_label.shape[0], pred_label.shape[1]
     for b in range(B):
         for n in range(N):
             if weight[b, n] != 0 and not np.isinf(weight[b, n]):
                 vote_label_pool[int(point_idx[b, n]), int(pred_label[b, n])] += 1
     return vote_label_pool
 
+def infer_whole_scenes(
+    dataset_path,
+    csv_out_dir,
+    model,
+    model_path,
+    device=0,
+    num_points=4096,
+    label_path=r"data_utils\labels_clean2.txt",
+    batch_size=32,
+    log_dir="pointnet2_sem_seg",
+    num_votes=3,
+    stride=15.0,
+    block_size=100.0,
+    padding=0.001,
+    ):
 
-def run_inference(
-    *,
-    model: str = "pointnet",
-    batch_size: int = 32,
-    gpu: str = "0",
-    num_point: int = 4096,
-    log_dir: str,
-    visual: bool = False,
-    test_project: str = "MorrisCollege_Pinson",
-    num_votes: int = 3,
-    data_type: str = "clustered",
-    data_dir: str,
-    label_path: str,
-    trained_model: str,
-    output_csv: str | None = None,
-) -> pd.DataFrame:
-    """
-    Library entry point. Call this from Python code.
-    Returns a DataFrame with x,y,z,r,g,b,gt_label,pred_label and also writes CSV.
-    """
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(device)
 
-    # --- env / device ---
-    os.environ["CUDA_VISIBLE_DEVICES"] = gpu
+    experiment_dir = os.path.join("log", "sem_seg", log_dir)
+    Path(experiment_dir).mkdir(parents=True, exist_ok=True)
 
-    # --- read label list used for NUM_CLASSES ---
+    logger = logging.getLogger("Infer")
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:
+        fh = logging.FileHandler(os.path.join(experiment_dir, "infer.txt"))
+        fh.setLevel(logging.INFO)
+        fh.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        logger.addHandler(fh)
+
+    def log_string(msg):
+        logger.info(msg)
+        print(msg)
+
     with open(label_path, "r") as f:
         classes = [line.strip() for line in f]
     num_classes = len(classes)
 
-    # --- experiment/visual dirs ---
-    experiment_dir = Path("log/sem_seg") / log_dir
-    visual_dir = experiment_dir / "visual"
-    visual_dir.mkdir(parents=True, exist_ok=True)
+    log_string(f"Found {num_classes} classes from {label_path}")
 
-    # --- logging ---
-    logger = logging.getLogger("Model")
-    logger.setLevel(logging.INFO)
-    if not logger.handlers:
-        fh = logging.FileHandler(experiment_dir / "eval.txt")
-        fh.setLevel(logging.INFO)
-        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
-
-    def log_string(s: str):
-        logger.info(s)
-        print(s)
-
-    log_string("PARAMETER ...")
-    log_string(
-        f"model={model}, batch_size={batch_size}, gpu={gpu}, num_point={num_point}, "
-        f"log_dir={log_dir}, visual={visual}, test_project={test_project}, "
-        f"num_votes={num_votes}, data_type={data_type}, data_dir={data_dir}, "
-        f"label_path={label_path}, trained_model={trained_model}"
-    )
-
-    # --- dataset ---
-    test_dataset = DLRDatasetWholeScene(
-        root=data_dir,
-        block_points=num_point,
-        split="test",
-        test_project=test_project,
-        stride=15.0,
-        block_size=100.0,
-        padding=0.001,
-        labels_path=label_path,
-    )
-    log_string(f"The number of test data is: {len(test_dataset)}")
-
-    # --- model loading ---
-    MODEL = importlib.import_module(f"{model}_sem_seg")
-    classifier = MODEL.get_model(num_classes).cuda()
-
-    ckpt_path = experiment_dir / "checkpoints" / trained_model
-    checkpoint = torch.load(str(ckpt_path))
+    # model
+    MODEL = importlib.import_module(model)
+    classifier = MODEL.get_model(num_classes).cuda().eval()
+    checkpoint = torch.load(model_path)
     classifier.load_state_dict(checkpoint["model_state_dict"])
-    classifier = classifier.eval()
+
+    data = np.load(dataset_path)
+    points_xyzrgb = data[:, :6]
 
     with torch.no_grad():
-        scene_id = [x[:-4] for x in test_dataset.file_list]
-        num_batches = len(test_dataset)
+        points = points_xyzrgb.copy()
+        xyz = points[:, :3]
 
-        total_seen_class = [0 for _ in range(num_classes)]
-        total_correct_class = [0 for _ in range(num_classes)]
-        total_iou_deno_class = [0 for _ in range(num_classes)]
+        coord_min = np.amin(xyz, axis=0)
+        coord_max = np.amax(xyz, axis=0)
 
-        log_string("---- EVALUATION WHOLE SCENE----")
+        grid_x = int(np.ceil(float(coord_max[0] - coord_min[0] - block_size) / stride) + 1)
+        grid_y = int(np.ceil(float(coord_max[1] - coord_min[1] - block_size) / stride) + 1)
 
-        # NOTE: Your original code writes ONE CSV at the end using whole_scene_data/label
-        # from the LAST batch only. If you want per-scene CSVs, move CSV writing inside loop.
-        last_whole_scene_data = None
-        last_whole_scene_label = None
-        last_pred_label = None
+        data_room_list = []
+        weight_list = []
+        index_list = []
 
-        for batch_idx in range(num_batches):
-            print(f"Inference [{batch_idx+1}/{num_batches}] {scene_id[batch_idx]} ...")
+        for iy in range(grid_y):
+            for ix in range(grid_x):
+                s_x = coord_min[0] + ix * stride
+                e_x = min(s_x + block_size, coord_max[0])
+                s_x = e_x - block_size
 
-            total_seen_class_tmp = [0 for _ in range(num_classes)]
-            total_correct_class_tmp = [0 for _ in range(num_classes)]
-            total_iou_deno_class_tmp = [0 for _ in range(num_classes)]
+                s_y = coord_min[1] + iy * stride
+                e_y = min(s_y + block_size, coord_max[1])
+                s_y = e_y - block_size
 
-            if visual:
-                fout = open(visual_dir / f"{scene_id[batch_idx]}_pred.obj", "w")
-                fout_gt = open(visual_dir / f"{scene_id[batch_idx]}_gt.obj", "w")
+                point_idxs = np.where(
+                    (xyz[:, 0] >= s_x - padding) & (xyz[:, 0] <= e_x + padding) &
+                    (xyz[:, 1] >= s_y - padding) & (xyz[:, 1] <= e_y + padding)
+                )[0]
+                if point_idxs.size == 0:
+                    continue
 
-            whole_scene_data = test_dataset.scene_points_list[batch_idx]
-            whole_scene_label = test_dataset.semantic_labels_list[batch_idx]
-            vote_label_pool = np.zeros((whole_scene_label.shape[0], num_classes))
+                num_batch = int(np.ceil(point_idxs.size / num_points))
+                point_size = int(num_batch * num_points)
+                replace = False if (point_size - point_idxs.size <= point_idxs.size) else True
+                point_idxs_repeat = np.random.choice(point_idxs, point_size - point_idxs.size, replace=replace)
+                point_idxs = np.concatenate((point_idxs, point_idxs_repeat))
+                np.random.shuffle(point_idxs)
 
-            for _ in tqdm(range(num_votes), total=num_votes):
-                scene_data, scene_label, scene_smpw, scene_point_index = test_dataset[batch_idx]
-                num_blocks = scene_data.shape[0]
-                s_batch_num = (num_blocks + batch_size - 1) // batch_size
+                data_batch = points[point_idxs, :]  # (point_size, 6)
+                
+                norm_xyz = np.zeros((point_size, 3))
+                norm_xyz[:, 0] = data_batch[:, 0] / (coord_max[0] if coord_max[0] != 0 else 1.0)
+                norm_xyz[:, 1] = data_batch[:, 1] / (coord_max[1] if coord_max[1] != 0 else 1.0)
+                norm_xyz[:, 2] = data_batch[:, 2] / (coord_max[2] if coord_max[2] != 0 else 1.0)
 
-                batch_data = np.zeros((batch_size, num_point, 9))
-                batch_label = np.zeros((batch_size, num_point))
-                batch_point_index = np.zeros((batch_size, num_point))
-                batch_smpw = np.zeros((batch_size, num_point))
+                data_batch[:, 0] = data_batch[:, 0] - (s_x + block_size / 2.0)
+                data_batch[:, 1] = data_batch[:, 1] - (s_y + block_size / 2.0)
+                data_batch[:, 3:6] /= 255.0  # rgb
 
-                for sbatch in range(s_batch_num):
-                    start_idx = sbatch * batch_size
-                    end_idx = min((sbatch + 1) * batch_size, num_blocks)
-                    real_batch_size = end_idx - start_idx
+                data_batch = np.concatenate((data_batch, norm_xyz), axis=1)  # (point_size, 9)
 
-                    batch_data[0:real_batch_size, ...] = scene_data[start_idx:end_idx, ...]
-                    batch_label[0:real_batch_size, ...] = scene_label[start_idx:end_idx, ...]
-                    batch_point_index[0:real_batch_size, ...] = scene_point_index[start_idx:end_idx, ...]
-                    batch_smpw[0:real_batch_size, ...] = scene_smpw[start_idx:end_idx, ...]
+                # For inference, keep weight=1 for all points (vote all points equally)
+                w = np.ones((point_size,), dtype=np.float32)
+                
+                # inside the (iy, ix) loops, after you build data_batch, w, point_idxs
+                data_room_list.append(data_batch)          # (point_size, 9)
+                weight_list.append(w)                      # (point_size,)
+                index_list.append(point_idxs.astype(np.int64))  # (point_size,)
 
-                    batch_data[:, :, 3:6] /= 1.0
+        if len(data_room_list) == 0:
+            raise RuntimeError("No blocks were created (data_room_list is empty). Check stride/block_size/padding.")
+        
+        data_room = np.concatenate(data_room_list, axis=0)       # (total_points_in_blocks, 9)
+        sample_weight = np.concatenate(weight_list, axis=0)      # (total_points_in_blocks,)
+        index_room = np.concatenate(index_list, axis=0)          # (total_points_in_blocks,)
 
-                    torch_data = torch.tensor(batch_data, dtype=torch.float32).cuda().transpose(2, 1)
-                    seg_pred, _ = classifier(torch_data)
-                    batch_pred_label = seg_pred.contiguous().cpu().data.max(2)[1].numpy()
+        assert data_room.ndim == 2, f"data_room should be 2D here, got {data_room.ndim}D {data_room.shape}"
+        assert data_room.shape[1] == 9, f"expected 9 features, got {data_room.shape}"
+        assert sample_weight.ndim == 1
+        assert index_room.ndim == 1
 
-                    vote_label_pool = add_vote(
-                        vote_label_pool,
-                        batch_point_index[0:real_batch_size, ...],
-                        batch_pred_label[0:real_batch_size, ...],
-                        batch_smpw[0:real_batch_size, ...],
-                    )
+        data_room = data_room.reshape((-1, num_points, data_room.shape[1]))
+        sample_weight = sample_weight.reshape((-1, num_points))
+        index_room = index_room.reshape((-1, num_points))
 
-            pred_label = np.argmax(vote_label_pool, 1)
+        num_blocks = data_room.shape[0]
+        vote_label_pool = np.zeros((points.shape[0], num_classes), dtype=np.float32)
 
-            for l in range(num_classes):
-                total_seen_class_tmp[l] += np.sum(whole_scene_label == l)
-                total_correct_class_tmp[l] += np.sum((pred_label == l) & (whole_scene_label == l))
-                total_iou_deno_class_tmp[l] += np.sum((pred_label == l) | (whole_scene_label == l))
-                total_seen_class[l] += total_seen_class_tmp[l]
-                total_correct_class[l] += total_correct_class_tmp[l]
-                total_iou_deno_class[l] += total_iou_deno_class_tmp[l]
+        for _ in tqdm(range(num_votes), total=num_votes):
+            s_batch_num = (num_blocks + batch_size - 1) // batch_size
 
-            iou_map = np.array(total_correct_class_tmp) / (np.array(total_iou_deno_class_tmp, dtype=np.float32) + 1e-6)
-            arr = np.array(total_seen_class_tmp)
-            tmp_iou = np.mean(iou_map[arr != 0])
-            log_string(f"Mean IoU of {scene_id[batch_idx]}: {tmp_iou:.4f}")
+            for sb in range(s_batch_num):
+                start = sb * batch_size
+                end = min((sb + 1) * batch_size, num_blocks)
+                real_bs = end - start
 
-            # write txt prediction
-            pred_txt = visual_dir / f"{scene_id[batch_idx]}.txt"
-            with open(pred_txt, "w") as f:
-                for i in pred_label:
-                    f.write(f"{int(i)}\n")
+                batch_data = np.zeros((batch_size, num_points, 9), dtype=np.float32)
+                batch_index = np.zeros((batch_size, num_points), dtype=np.int64)
+                batch_w = np.zeros((batch_size, num_points), dtype=np.float32)
 
-            # optionally write objs
-            if visual:
-                for i in range(whole_scene_label.shape[0]):
-                    color = g_label2color[pred_label[i]]
-                    color_gt = g_label2color[whole_scene_label[i]]
-                    fout.write(
-                        "v %f %f %f %d %d %d\n"
-                        % (whole_scene_data[i, 0], whole_scene_data[i, 1], whole_scene_data[i, 2],
-                           color[0], color[1], color[2])
-                    )
-                    fout_gt.write(
-                        "v %f %f %f %d %d %d\n"
-                        % (whole_scene_data[i, 0], whole_scene_data[i, 1], whole_scene_data[i, 2],
-                           color_gt[0], color_gt[1], color_gt[2])
-                    )
-                fout.close()
-                fout_gt.close()
+                batch_data[:real_bs] = data_room[start:end]
+                batch_index[:real_bs] = index_room[start:end]
+                batch_w[:real_bs] = sample_weight[start:end]
 
-            last_whole_scene_data = whole_scene_data
-            last_whole_scene_label = whole_scene_label
-            last_pred_label = pred_label
+                torch_data = torch.from_numpy(batch_data).float().cuda().transpose(2, 1)
+                seg_pred, _ = classifier(torch_data)
+                pred = seg_pred.contiguous().cpu().data.max(2)[1].numpy()  # (B,N)
 
-        # final metrics print (same as your script; you can expand as needed)
-        log_string("Done!")
+                vote_label_pool = add_vote(
+                    vote_label_pool,
+                    batch_index[:real_bs],
+                    pred[:real_bs],
+                    batch_w[:real_bs],
+                )
 
-        # Build DataFrame (last scene, matching your original behavior)
-        df = pd.DataFrame(last_whole_scene_data, columns=["x", "y", "z", "r", "g", "b"])
-        df["gt_label"] = last_whole_scene_label
-        df["pred_label"] = last_pred_label
+        pred_label = np.argmax(vote_label_pool, axis=1).astype(np.int32)
 
-        if output_csv is None:
-            output_csv = f"{test_project}_Output.csv"
-        df.to_csv(output_csv, index=False)
+        out = np.hstack([points_xyzrgb, pred_label.reshape(-1, 1)])
+        df = pd.DataFrame(out, columns=["x", "y", "z", "r", "g", "b", "pred_class"])
 
-        return df
+        df.to_csv(csv_out_dir, index=False)
+        print(f"Saved: {csv_out_dir}")
+
+    log_string("Inference complete.")
+    
+    return df
+

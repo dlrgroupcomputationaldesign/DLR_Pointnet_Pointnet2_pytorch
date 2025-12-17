@@ -1,3 +1,3 @@
-from .inference import run_inference
+from .inference import infer_whole_scenes
 
-__all__ = ["run_inference"]
+__all__ = ["infer_whole_scenes"]

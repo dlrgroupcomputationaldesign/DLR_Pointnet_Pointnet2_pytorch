@@ -31,7 +31,7 @@ def infer_whole_scenes(
     model_path,
     device=0,
     num_points=4096,
-    label_path=r"data_utils\labels_clean2.txt",
+    label_path="labels_clean2.txt",
     batch_size=32,
     log_dir="pointnet2_sem_seg",
     num_votes=3,

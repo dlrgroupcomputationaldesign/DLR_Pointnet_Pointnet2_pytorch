@@ -172,7 +172,7 @@ def infer_whole_scenes(
         pred_label = np.argmax(vote_label_pool, axis=1).astype(np.int32)
 
         out = np.hstack([points_xyzrgb, pred_label.reshape(-1, 1)])
-        df = pd.DataFrame(out, columns=["x", "y", "z", "r", "g", "b", "pred_class"])
+        df = pd.DataFrame(out, columns=["x", "y", "z", "r", "g", "b", "pred_label"])
 
         df.to_csv(csv_out_dir, index=False)
         print(f"Saved: {csv_out_dir}")

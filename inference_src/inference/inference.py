@@ -144,15 +144,16 @@ def infer_whole_scenes(
 
         for _ in tqdm(range(num_votes), total=num_votes):
             s_batch_num = (num_blocks + batch_size - 1) // batch_size
+            batch_data = np.zeros((batch_size, num_points, 9), dtype=np.float32)
+            batch_index = np.zeros((batch_size, num_points), dtype=np.int64)
+            batch_w = np.zeros((batch_size, num_points), dtype=np.float32)
 
             for sb in range(s_batch_num):
                 start = sb * batch_size
                 end = min((sb + 1) * batch_size, num_blocks)
                 real_bs = end - start
 
-                batch_data = np.zeros((batch_size, num_points, 9), dtype=np.float32)
-                batch_index = np.zeros((batch_size, num_points), dtype=np.int64)
-                batch_w = np.zeros((batch_size, num_points), dtype=np.float32)
+                
 
                 batch_data[:real_bs] = data_room[start:end]
                 batch_index[:real_bs] = index_room[start:end]

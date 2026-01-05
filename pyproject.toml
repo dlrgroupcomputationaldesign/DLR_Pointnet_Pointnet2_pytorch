@@ -4,12 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "point-cloud-inference"
-version = "0.2.0"
+version = "0.3.0"
 description = "PointNet inference on point cloud data."
 
 requires-python = ">=3.9"
 
 dependencies = [
+    "numpy==1.26.4",
+    "pandas==2.2.3",
     "tqdm==4.67.1"
 ]
 
@@ -19,7 +21,12 @@ package-dir = {"" = "inference_src"}
 [tool.setuptools.packages.find]
 where = ["inference_src"]
 
-
+[project.optional-dependencies]
+torch_cu111 = [
+  "torch==1.8.1+cu111",
+]
 
 [project.urls]
 Homepage = "https://github.com/dlrgroupcomputationaldesign/DLR_Pointnet_Pointnet2_pytorch"
+
+

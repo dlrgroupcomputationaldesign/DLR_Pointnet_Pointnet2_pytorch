@@ -4,13 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "point-cloud-inference"
-version = "0.1.0"
+version = "0.2.0"
 description = "PointNet inference on point cloud data."
 
 requires-python = ">=3.9"
 
 dependencies = [
-    "pandas==2.3.3",
     "tqdm==4.67.1"
 ]
 
